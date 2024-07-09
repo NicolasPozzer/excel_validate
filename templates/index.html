@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Excel to SQL Database</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/styles.css">
+    <style>
+        .download-form {
+            display: none; /* Formulario oculto */
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Upload Excel to SQL</h1>
+        <form action="/upload" enctype="multipart/form-data" method="post">
+            <label for="file">Choose Excel File:</label>
+            <input type="file" id="file" name="file" required>
+
+            <button type="submit">Upload and Process</button>
+        </form>
+
+        {% if error %}
+        <p style="color: red;">{{ error }}</p>
+        {% endif %}
+
+        {% if success_message %}
+        <p style="color: green;">{{ success_message }}</p>
+        {% endif %}
+
+        {% if error_file_url %}
+        <form action="{{ error_file_url }}" method="get" class="download-form" id="downloadForm">
+            <button type="submit" class="download-btn">Download Error File</button>
+        </form>
+        <script>
+            // Script para enviar el formulario automáticamente al cargar la página, solo si hay un archivo de error para descargar
+            document.addEventListener('DOMContentLoaded', function () {
+                document.getElementById('downloadForm').submit();
+            });
+        </script>
+        {% endif %}
+        <br>
+        <p>GitHub repo: <a href="https://github.com/NicolasPozzer/exel_to_database?tab=readme-ov-file" target="_blank">@NicolasPozzer</a>.</p>
+    </div>
+</body>
+</html>
