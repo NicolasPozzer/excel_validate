@@ -1,74 +1,44 @@
 import pandas as pd
+import re
 
-def validate_data_types(df):
-    first_row_types = df.iloc[0].apply(lambda x: pd.api.types.infer_dtype([x]))
+class ExpReg:
+    def __init__(self, nameColumn, contain):
+        self.nameColumn = nameColumn
+        self.contain = contain
 
-    for col in df.columns:
-        col_type = first_row_types[col]
-        if not df[col].apply(lambda x: pd.api.types.infer_dtype([x])).eq(col_type).all():
-            return False
-    return True
-
-def get_sql_type(dtype):
-    if pd.api.types.is_integer_dtype(dtype):
-        return "INT"
-    elif pd.api.types.is_float_dtype(dtype):
-        return "FLOAT"
-    elif pd.api.types.is_bool_dtype(dtype):
-        return "BIT"
-    elif pd.api.types.is_datetime64_any_dtype(dtype):
-        return "DATETIME"
-    else:
-        return "NVARCHAR(MAX)"
-
-def detect_data_types(df):
-    columns = df.columns
-    types = {}
-
-    for col in columns:
-        for value in df[col]:
-            if not pd.isna(value):
-                types[col] = pd.api.types.infer_dtype([value])
-                break
-
-    return types
-
-def create_table_from_df(cursor, table_name, df):
-    types = detect_data_types(df)
-    columns_with_types = [f"{col} {get_sql_type(types[col])}" for col in df.columns]
-    create_table_query = f"""
-    CREATE TABLE {table_name} (
-        {', '.join(columns_with_types)}
-    )
-    """
-    cursor.execute(create_table_query)
-
-def insert_data_from_df(cursor, table_name, df):
-    insert_query = f"INSERT INTO {table_name} ({', '.join(df.columns)}) VALUES ({', '.join(['?' for _ in df.columns])})"
-
-    for index, row in df.iterrows():
-        cursor.execute(insert_query, tuple(row))
-    cursor.commit()
-
-def validate_row(row, first_row_types):
+#main function
+def validate_row(row, first_row_types, regex_rules):
     errors = []
     error_columns = []
 
+    # for to rows
     for col, value in row.items():
         if pd.isna(value):
             errors.append(f"{col}: NULL VALUE")
             error_columns.append(col)
             print(f"NULL VALUE IN: '{col}'")
-        elif pd.api.types.infer_dtype([value]) != first_row_types[col]:
-            errors.append(f"{col}: Incorrect data type")
-            error_columns.append(col)
-            print(f"INCORRECT DATA TYPE IN: '{col}'")
+        else:
+            regex_rule_list = regex_rules.get(col, [])
+            type_mismatch = pd.api.types.infer_dtype([value]) != first_row_types[col]
+            regex_mismatch = any(not re.search(rule.contain, str(value)) for rule in regex_rule_list)
+
+            if type_mismatch or regex_mismatch:
+                if type_mismatch:
+                    errors.append(f"{col}: incorrect data type")
+                    print(f"INCORRECT DATA TYPE IN: '{col}'")
+                if regex_mismatch:
+                    for rule in regex_rule_list:
+                        if not re.search(rule.contain, str(value)):
+                            errors.append(f"{col}: Does not match regex '{rule.contain}'")
+                            print(f"REGEX MISMATCH IN: '{col}'")
+                error_columns.append(col)
 
     return errors, error_columns
 
-def validate_dataframe(df):
+# Data validate
+def validate_dataframe(df, regex_rules):
     first_row_types = df.iloc[0].apply(lambda x: pd.api.types.infer_dtype([x]))
-    errors_and_columns = df.apply(lambda row: validate_row(row, first_row_types), axis=1)
+    errors_and_columns = df.apply(lambda row: validate_row(row, first_row_types, regex_rules), axis=1)
     errors_list = errors_and_columns.apply(lambda x: x[0])
     error_columns_list = errors_and_columns.apply(lambda x: x[1])
     valid_rows = df[errors_list.str.len() == 0]
@@ -76,6 +46,7 @@ def validate_dataframe(df):
     error_columns = error_columns_list[errors_list.str.len() > 0]
     return valid_rows, invalid_rows, first_row_types, error_columns
 
+# Save and write excel file
 def save_invalid_rows(invalid_rows, file_path, original_df, first_row_types, error_columns):
     invalid_rows = invalid_rows.copy()
     invalid_rows['Error Columns'] = error_columns.apply(lambda cols: ', '.join(cols) if isinstance(cols, list) else '')
