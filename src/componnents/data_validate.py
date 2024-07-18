@@ -11,7 +11,6 @@ def validate_row(row, first_row_types, regex_rules):
     errors = []
     error_columns = []
 
-    # for to rows
     for col, value in row.items():
         if pd.isna(value):
             errors.append(f"{col}: NULL VALUE")
@@ -20,7 +19,7 @@ def validate_row(row, first_row_types, regex_rules):
         else:
             regex_rule_list = regex_rules.get(col, [])
             type_mismatch = pd.api.types.infer_dtype([value]) != first_row_types[col]
-            regex_mismatch = any(not re.search(rule.contain, str(value)) for rule in regex_rule_list)
+            regex_mismatch = any(not rule.matches(str(value)) for rule in regex_rule_list)
 
             if type_mismatch or regex_mismatch:
                 if type_mismatch:
@@ -28,12 +27,13 @@ def validate_row(row, first_row_types, regex_rules):
                     print(f"INCORRECT DATA TYPE IN: '{col}'")
                 if regex_mismatch:
                     for rule in regex_rule_list:
-                        if not re.search(rule.contain, str(value)):
-                            errors.append(f"{col}: Does not match regex '{rule.contain}'")
+                        if not rule.matches(str(value)):
+                            errors.append(f"{col}: Does not match regex '{rule.pattern}'")
                             print(f"REGEX MISMATCH IN: '{col}'")
                 error_columns.append(col)
 
     return errors, error_columns
+
 
 # Data validate
 def validate_dataframe(df, regex_rules):
@@ -45,6 +45,7 @@ def validate_dataframe(df, regex_rules):
     invalid_rows = df[errors_list.str.len() > 0]
     error_columns = error_columns_list[errors_list.str.len() > 0]
     return valid_rows, invalid_rows, first_row_types, error_columns
+
 
 # Save and write excel file
 def save_invalid_rows(invalid_rows, file_path, original_df, first_row_types, error_columns):
